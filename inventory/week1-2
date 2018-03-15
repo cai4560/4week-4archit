@@ -1,0 +1,10 @@
+[week1-2]
+localhost
+
+[week1-2:vars]
+bucket_name=week1-2.jackluo0711.com
+index_document=index.html
+hosted_zone_name=jackluo0711.com.
+hosted_zone_id=Z2FDTNDATAQYW2
+origin_access_identity_comment=week1-cname.jackluo0711.com
+certificate_arn=arn:aws:acm:us-east-1:318611170604:certificate/d83d88a3-4b8b-433e-87b3-2b0b358b72b4

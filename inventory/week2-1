@@ -1,0 +1,12 @@
+[week2-1]
+localhost
+
+[week2-1:vars]
+bucket_name=jenkins.jackluo0711.com
+aws_account_id=318611170604
+availability_zone=ap-northeast-1
+vpc_id=vpc-18dd957c
+subnet_id=subnet-00243e76
+external_cidr_ip=subnet-00243e76
+image_id=ami-48630c2e
+instance_type=t2.micro

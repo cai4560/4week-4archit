@@ -1,0 +1,86 @@
+Description: Static website stack
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Bucket Name
+  IndexDocument:
+    Type: String
+    Description: Index Document
+  HostedZoneName:
+    Type: String
+    Description: Hosted Zone Name
+  HostedZoneId:
+    Type: String
+    Description: Hosted Zone Id
+  OriginAccessIdentityComment:
+    Type: String
+    Description: The comment for Cloud Front Origin Access Identity
+  CertificateARN:
+    Type: String
+    Description: The Certificate Manager arn
+
+Resources:
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Ref OriginAccessIdentityComment
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      WebsiteConfiguration:
+         IndexDocument: !Ref IndexDocument
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:GetObject
+          Resource: !Join ['', ['arn:aws:s3:::', !Ref BucketName, /*]]
+          Principal:
+            AWS: !Join ['', ['arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ', !Ref OriginAccessIdentity] ]
+
+  CloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref BucketName
+        Enabled: true
+        Comment: Created by Cloudformation
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateARN
+          MinimumProtocolVersion: TLSv1.1_2016
+          SslSupportMethod: sni-only
+        Origins:
+        - Id: S3-Origin
+          DomainName: !GetAtt S3Bucket.DomainName
+          S3OriginConfig:
+            OriginAccessIdentity: !Join ['', ['origin-access-identity/cloudfront/', !Ref OriginAccessIdentity] ]
+        DefaultRootObject: !Ref IndexDocument
+        DefaultCacheBehavior:
+          TargetOriginId: S3-Origin
+          ViewerProtocolPolicy: redirect-to-https
+          DefaultTTL: 600
+          ForwardedValues:
+            QueryString: True
+            Cookies:
+              Forward: all
+          Compress: True
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref BucketName
+      Type: A
+      HostedZoneName: !Ref HostedZoneName
+      AliasTarget:
+        DNSName: !GetAtt CloudFront.DomainName
+        HostedZoneId: !Ref HostedZoneId

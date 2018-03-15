@@ -1,0 +1,119 @@
+Description: Dynamic-Web-Appliction
+Parameters:
+  BucketName:
+    Type: String
+    Description: S3 Bucket Name
+  AWSAccountId:
+    Type: String
+    Description: AWS Account ID
+  AvailabilityZone:
+    Type: String
+    Description: Availability Zone
+    Default: ap-northeast-1a
+  VPCId:
+    Type: String
+    Description: VPC ID
+  SubnetId:
+    Type: String
+    Description: Subnet ID
+  ExternalCIDRIP:
+    Type: String
+    Description: External CIDR IP
+  ImageId:
+    Type: String
+    Description: Image ID
+  InstanceType:
+    Type: String
+    Description: Instance Type
+    Default: t2.micro
+
+Resources:
+#  S3Bucket:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: !Ref BucketName
+#      WebsiteConfiguration:
+#         IndexDocument: !Ref IndexDocument
+#
+#  S3BucketPolicy:
+#    Type: AWS::S3::BucketPolicy
+#    Properties:
+#      Bucket: !Ref S3Bucket
+#      PolicyDocument:
+#        Statement:
+#        - Effect: Allow
+#          Action:
+#          - s3:GetObject
+#          Resource: !Join ['', ['arn:aws:s3:::', !Ref BucketName, /*]]
+#          Principal:
+#            AWS: !Join ['', ['arn:aws:iam:::',!Ref AWSAccountId,'root'] ]
+
+
+  Profile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - Ref: Role
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: permit-s3-and-cfn
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action: cloudformation:DescribeStackResource
+              Resource: "*"
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Join ['', ['arn:aws:s3:::', !Ref S3Bucket, /*]]
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allowing incoming on ssh port
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        CidrIp: !Ref ExternalCIDRIP
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile: !Ref Profile
+      AvailabilityZone: !Ref AvailabilityZone
+      SecurityGroupIds:
+      - Ref: SecurityGroup
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref PrivateSubnets
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -ex
+
+            wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -
+            echo deb https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
+            sudo apt-get update
+            sudo apt-get install jenkins
+            sudo systemctl start jenkins
+            sudo ufw allow 8080
+            sudo ufw allow OpenSSH
+            sudo ufw enable

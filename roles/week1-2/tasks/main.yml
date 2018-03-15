@@ -1,0 +1,16 @@
+---
+  - name: week1-2
+    cloudformation:
+      stack_name: "Week1-2-static-website-stack-with-https"
+      state: present
+      region: "ap-northeast-1"
+      disable_rollback: true
+      template: "cloudformation/week1-2-static-website.yml"
+      stack_policy: "policies/stack-policy.json"
+      template_parameters:
+        BucketName: "{{bucket_name}}"
+        IndexDocument: "{{index_document}}"
+        HostedZoneName: "{{hosted_zone_name}}"
+        HostedZoneId: "{{hosted_zone_id}}"
+        OriginAccessIdentityComment: "{{origin_access_identity_comment}}"
+        CertificateARN: "{{certificate_arn}}"
