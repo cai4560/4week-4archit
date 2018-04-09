@@ -2,7 +2,7 @@
 localhost
 
 [week1-2:vars]
-bucket_name=week1-2.jackluo0711.com
+bucket_name=week1-3.jackluo0711.com
 index_document=index.html
 hosted_zone_name=jackluo0711.com.
 hosted_zone_id=Z2FDTNDATAQYW2

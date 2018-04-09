@@ -8,7 +8,7 @@
       template: "cloudformation/week2-1-dynamic-web-application.yml"
       stack_policy: "policies/stack-policy.json"
       template_parameters:
-        BucketName: "{{bucket_name}}"
+        RecordName: "{{record_name}}"
         AWSAccountId: "{{aws_account_id}}"
         AvailabilityZone: "{{availability_zone}}"
         VPCId: "{{vpc_id}}"
@@ -16,3 +16,5 @@
         ExternalCIDRIP: "{{external_cidr_ip}}"
         ImageId: "{{image_id}}"
         InstanceType: "{{instance_type}}"
+        HostedZoneName: "{{hosted_zone_name}}"
+        KeyName: "{{key_name}}"

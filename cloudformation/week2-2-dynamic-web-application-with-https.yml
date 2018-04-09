@@ -1,0 +1,210 @@
+Description: Dynamic-Web-Appliction-with-https
+Parameters:
+  VpcId:
+    Type: String
+    Description: Vpc ID
+  Subnets:
+    Type: CommaDelimitedList
+    Description: The subnets which the ELB is hosted.
+  AvailabilityZones:
+    Type: CommaDelimitedList
+    Description: The availability zones in the VPC
+  CertificateARN:
+    Type: String
+    Description: The Certificate Manager arn
+  InstanceType:
+    Type: String
+    Description: Instance Type
+    Default: t2.micro
+  ImageId:
+    Type: String
+    Description: Image ID
+  KeyName:
+    Type: String
+    Description: The key name for ec2 secret key
+  HostedZoneName:
+    Type: String
+    Description: Hosted Zone Name
+  RecordName:
+    Type: String
+    Description: Record Name in Route53
+
+Resources:
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - Ref: InstanceRole
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: instance-policy
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+              - application-autoscaling:*
+              - cloudformation:*
+              - ecs:*
+              - iam:*
+              - route53:*
+              - cloudfront:*
+              - sts:AssumeRole
+              Resource: "*"
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: For ELB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+
+  ElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Application-Load-Balancer
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref Subnets
+      IpAddressType: ipv4
+      SecurityGroups:
+      - !Ref ELBSecurityGroup
+
+  ALBListenerForHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ElasticLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref ELBTargetGroup
+
+  ALBListenerForHttps:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ElasticLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref ELBTargetGroup
+      Certificates:
+      - CertificateArn: !Ref CertificateARN
+
+  ELBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: ELB-Target-Group
+      Protocol: HTTP
+      Port: 8080
+      TargetType: instance
+      Matcher:
+        HttpCode: 200-399
+      VpcId: !Ref VpcId
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /login
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: For EC2 Instance
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  LaunchConfiguration:
+      Type: AWS::AutoScaling::LaunchConfiguration
+      Properties:
+        InstanceType: !Ref InstanceType
+        ImageId: !Ref ImageId
+        SecurityGroups:
+          - !Ref EC2SecurityGroup
+        IamInstanceProfile: !Ref InstanceProfile
+        BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp2
+            DeleteOnTermination: true
+        KeyName: !Ref KeyName
+        UserData:
+           Fn::Base64: !Sub |
+              #!/bin/bash -ex
+
+              # Install Jenkins
+              wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -
+              echo deb https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
+              sudo apt-get update
+              sudo apt-get install jenkins -y
+              sudo systemctl start jenkins
+              sudo ufw allow 8080
+              sudo ufw allow OpenSSH
+              yes | sudo ufw enable
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones: !Ref AvailabilityZones
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      Cooldown: 300
+      HealthCheckGracePeriod: 600
+      HealthCheckType: ELB
+      MinSize: 1
+      MaxSize: 2
+      TargetGroupARNs:
+      - !Ref ELBTargetGroup
+      VPCZoneIdentifier: !Ref Subnets
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref RecordName
+      HostedZoneName: !Ref HostedZoneName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ElasticLoadBalancer.DNSName
+        EvaluateTargetHealth: true
+        HostedZoneId: !GetAtt ElasticLoadBalancer.CanonicalHostedZoneID
+
+

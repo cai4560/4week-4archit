@@ -1,8 +1,8 @@
 Description: Dynamic-Web-Appliction
 Parameters:
-  BucketName:
+  RecordName:
     Type: String
-    Description: S3 Bucket Name
+    Description: Record Name in Route53
   AWSAccountId:
     Type: String
     Description: AWS Account ID
@@ -26,29 +26,14 @@ Parameters:
     Type: String
     Description: Instance Type
     Default: t2.micro
+  HostedZoneName:
+    Type: String
+    Description: Hosted Zone Name
+  KeyName:
+    Type: String
+    Description: The key name for ec2 secret key
 
 Resources:
-#  S3Bucket:
-#    Type: AWS::S3::Bucket
-#    Properties:
-#      BucketName: !Ref BucketName
-#      WebsiteConfiguration:
-#         IndexDocument: !Ref IndexDocument
-#
-#  S3BucketPolicy:
-#    Type: AWS::S3::BucketPolicy
-#    Properties:
-#      Bucket: !Ref S3Bucket
-#      PolicyDocument:
-#        Statement:
-#        - Effect: Allow
-#          Action:
-#          - s3:GetObject
-#          Resource: !Join ['', ['arn:aws:s3:::', !Ref BucketName, /*]]
-#          Principal:
-#            AWS: !Join ['', ['arn:aws:iam:::',!Ref AWSAccountId,'root'] ]
-
-
   Profile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -69,15 +54,12 @@ Resources:
           - sts:AssumeRole
       Path: /
       Policies:
-        - PolicyName: permit-s3-and-cfn
+        - PolicyName: simple-policy
           PolicyDocument:
             Statement:
             - Effect: Allow
               Action: cloudformation:DescribeStackResource
               Resource: "*"
-            - Effect: Allow
-              Action: s3:GetObject
-              Resource: !Join ['', ['arn:aws:s3:::', !Ref S3Bucket, /*]]
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -103,7 +85,14 @@ Resources:
       - Ref: SecurityGroup
       ImageId: !Ref ImageId
       InstanceType: !Ref InstanceType
-      SubnetId: !Ref PrivateSubnets
+      SubnetId: !Ref SubnetId
+      BlockDeviceMappings:
+      - DeviceName: /dev/xvda
+        Ebs:
+          VolumeSize: 8
+          VolumeType: gp2
+          DeleteOnTermination: true
+      KeyName: !Ref KeyName
       UserData:
         Fn::Base64:
           !Sub |
@@ -112,8 +101,18 @@ Resources:
             wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -
             echo deb https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
             sudo apt-get update
-            sudo apt-get install jenkins
+            sudo apt-get install jenkins -y
             sudo systemctl start jenkins
             sudo ufw allow 8080
             sudo ufw allow OpenSSH
-            sudo ufw enable
+            yes | sudo ufw enable
+
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref RecordName
+      Type: A
+      HostedZoneName: !Ref HostedZoneName
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt EC2Instance.PublicIp

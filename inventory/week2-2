@@ -1,0 +1,13 @@
+[week2-2]
+localhost
+
+[week2-2:vars]
+vpc_id=vpc-18dd957c
+subnets=subnet-00243e76,subnet-0cbbe254,subnet-4501556d
+availability_zones=ap-northeast-1a,ap-northeast-1c,ap-northeast-1d
+cert_arn=arn:aws:acm:ap-northeast-1:318611170604:certificate/d8bf5929-20cf-497f-a967-340b8f4154fa
+instance_type=t2.micro
+image_id=ami-48630c2e
+key_name=jackluo0711
+hosted_zone_name=jackluo0711.com.
+record_name=jenkins.jackluo0711.com
